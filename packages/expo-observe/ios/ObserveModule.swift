@@ -10,6 +10,7 @@ internal struct Config: Record {
   @Field var dispatchingEnabled: Bool?
   @Field var dispatchInDebug: Bool?
   @Field var sampleRate: Double?
+  @Field var scheduledDispatchInterval: Double?
 }
 
 internal struct BundleDefaults: Record {
@@ -41,13 +42,15 @@ public final class ObserveModule: Module {
           PersistedConfig(
             dispatchingEnabled: config.dispatchingEnabled,
             dispatchInDebug: config.dispatchInDebug,
-            sampleRate: config.sampleRate
+            sampleRate: config.sampleRate,
+            scheduledDispatchInterval: config.scheduledDispatchInterval
           )
         )
         let resolvedEnvironment = config.environment ?? ObserveUserDefaults.bundleDefaults?.environment
         if let resolvedEnvironment {
           AppMetrics.setEnvironment(resolvedEnvironment)
         }
+        ObservabilityManager.setDispatchIntervalSeconds(config.scheduledDispatchInterval)
       }
     }
 
