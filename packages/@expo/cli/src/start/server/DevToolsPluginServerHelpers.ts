@@ -15,15 +15,36 @@ export type DevToolsPluginRequestHandler = (
 
 /**
  * Per-connection WebSocket handler exported by a plugin's `serverEntryPoint`. Receives the
- * connected `ws` socket, the upgrade `request`, and the `WebSocketServer` the connection belongs
- * to (use `server.clients` to broadcast). Mirrors the `ws` `'connection'` event so plugin authors
- * use the familiar `socket.on('message', ...)` / `socket.send(...)` API.
+ * connected `ws` socket, the upgrade `request` as a fetch API `Request` (matching the
+ * `requestHandler` request object), and the `WebSocketServer` the connection belongs to (use
+ * `server.clients` to broadcast). Mirrors the `ws` `'connection'` event so plugin authors use the
+ * familiar `socket.on('message', ...)` / `socket.send(...)` API.
  */
 export type DevToolsPluginWebSocketHandler = (
   socket: WebSocket,
-  request: IncomingMessage,
+  request: Request,
   server: WebSocketServer
 ) => void;
+
+/**
+ * Converts a Node.js WebSocket upgrade request into a fetch API `Request` so plugin WebSocket
+ * handlers receive the same web-style request object as the fetch `requestHandler`. Upgrade
+ * requests are always bodyless `GET`s, so only the URL and headers are carried over.
+ */
+function convertUpgradeRequest(request: IncomingMessage): Request {
+  const proto = 'encrypted' in request.socket && !!request.socket.encrypted ? 'https' : 'http';
+  const url = new URL(request.url ?? '/', `${proto}://${request.headers.host}`);
+  const headers = new Headers();
+  const { rawHeaders } = request;
+  for (let index = 0; index < rawHeaders.length; index += 2) {
+    const name = rawHeaders[index];
+    const value = rawHeaders[index + 1];
+    if (name != null && value != null) {
+      headers.append(name, value);
+    }
+  }
+  return new Request(url.href, { method: request.method, headers });
+}
 
 export async function loadRequestHandlerAsync({
   packageName,
@@ -71,7 +92,9 @@ export async function loadWebSocketServerAsync({
         );
       }
       const server = new WebSocketServer({ noServer: true });
-      server.on('connection', (socket, request) => handler(socket, request, server));
+      server.on('connection', (socket, request) =>
+        handler(socket, convertUpgradeRequest(request), server)
+      );
       // Routes are mounted relative to the plugin endpoint, so they must be absolute.
       return [route.startsWith('/') ? route : `/${route}`, server];
     })
