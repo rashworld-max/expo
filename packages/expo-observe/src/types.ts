@@ -67,7 +67,14 @@ export type ObserveConfig = {
   integrations?: ObserveIntegrationsConfig;
 };
 
-export type ObserveIntegrationsConfig = {
+/**
+ * Per-integration opt-in flags. Declared as an `interface` so integration
+ * libraries living in their own packages can register their entry through
+ * TypeScript declaration merging — e.g. `expo-image` adds an `'expo-image'`
+ * key via `declare module 'expo-observe'`. `expo-observe` itself takes no
+ * dependency on those packages.
+ */
+export interface ObserveIntegrationsConfig {
   /**
    * Enables the `expo-router` integration, which records navigation metrics
    * (`cold_ttr`, `warm_ttr`, `tti`) from router state changes.
@@ -88,14 +95,35 @@ export type ObserveIntegrationsConfig = {
    * @default false
    */
   'react-navigation'?: boolean;
+}
+
+/**
+ * Events emitted by the native `ExpoObserve` module.
+ */
+export type ObserveModuleEvents = {
+  /**
+   * Fired on every `configure(...)` call, carrying the resolved `integrations`
+   * config. Integration libraries (e.g. `expo-image`) subscribe to this to
+   * activate themselves; `getIntegrations()` returns the same config for
+   * listeners that attach after `configure` already ran.
+   */
+  onConfigure: (payload: { integrations: ObserveIntegrationsConfig }) => void;
 };
 
-export declare class ObserveModule extends NativeModule {
+export declare class ObserveModule extends NativeModule<ObserveModuleEvents> {
   dispatchEvents(): Promise<void>;
   /**
-   * Configures observability settings.
+   * Configures observability settings. Emits the `onConfigure` event with the
+   * resolved `integrations` config so integration libraries can activate.
    */
   configure(config: ObserveConfig): void;
+  /**
+   * Returns the `integrations` config from the most recent `configure(...)`
+   * call, or an empty object if `configure` has not run yet. Lets a listener
+   * that attaches after `configure` read the current state without waiting for
+   * the next `onConfigure` event.
+   */
+  getIntegrations(): ObserveIntegrationsConfig;
   /**
    * Records a log event against the current main session. The event is
    * persisted locally and dispatched on the next `dispatchEvents()` flush.

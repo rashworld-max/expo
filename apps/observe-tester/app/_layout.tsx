@@ -9,6 +9,10 @@ Observe.configure({
   dispatchInDebug: true,
   integrations: {
     'expo-router': true,
+    // Report images decoded more than 2× larger than they are rendered.
+    'expo-image': {
+      ratio: 2,
+    },
   },
 });
 
